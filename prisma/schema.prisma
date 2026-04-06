@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Salon {
+  id                     String   @id @default(cuid())
+  name                   String
+  bookingIntervalMinutes Int      @default(15)
+  bookingLeadHours       Int      @default(0)
+  confirmationHours      Int      @default(24)
+  reminderHours          Int      @default(2)
+
+  barbers                Barber[]
+  services               Service[]
+}
+
+model Barber {
+  id              String          @id @default(cuid())
+  name            String
+  salonId         String
+  salon           Salon           @relation(fields: [salonId], references: [id])
+  appointments    Appointment[]
+  workingHours    WorkingHour[]
+  breaks          BreakTime[]
+  waitlistEntries WaitlistEntry[]
+}
+
+model Service {
+  id              String          @id @default(cuid())
+  name            String
+  durationMinutes Int
+  salonId         String
+  salon           Salon           @relation(fields: [salonId], references: [id])
+  appointments    Appointment[]
+  waitlistEntries WaitlistEntry[]
+}
+
+model Customer {
+  id              String          @id @default(cuid())
+  firstName       String
+  lastName        String
+  phone           String?
+  appointments    Appointment[]
+  waitlistEntries WaitlistEntry[]
+}
+
+model Appointment {
+  id         String   @id @default(cuid())
+  startAt    DateTime
+  endAt      DateTime
+  confirmed  Boolean  @default(false)
+
+  barberId   String
+  barber     Barber   @relation(fields: [barberId], references: [id])
+
+  serviceId  String
+  service    Service  @relation(fields: [serviceId], references: [id])
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  createdAt  DateTime @default(now())
+}
+
+model WorkingHour {
+  id        String @id @default(cuid())
+  barberId  String
+  weekday   Int
+  startTime String
+  endTime   String
+
+  barber    Barber @relation(fields: [barberId], references: [id])
+}
+
+model BreakTime {
+  id         String   @id @default(cuid())
+  barberId   String
+  startDate  String?
+  endDate    String?
+  isFullDay  Boolean  @default(false)
+  startTime  String?
+  endTime    String?
+  reason     String?
+
+  barber     Barber   @relation(fields: [barberId], references: [id])
+}
+
+model WaitlistEntry {
+  id                String    @id @default(cuid())
+  barberId          String?
+  serviceId         String
+  customerId        String
+  date              String
+
+  preferredFromTime String?
+  preferredToTime   String?
+
+  anyBarber         Boolean   @default(false)
+  status            String    @default("waiting")
+  offerSentAt       DateTime?
+  offerExpiresAt    DateTime?
+  acceptedAt        DateTime?
+  notified          Boolean   @default(false)
+  notifiedAt        DateTime?
+  expiresAt         DateTime?
+
+  offeredBarberId   String?
+  offeredStartAt    DateTime?
+  offeredEndAt      DateTime?
+
+  createdAt         DateTime  @default(now())
+
+  barber            Barber?   @relation(fields: [barberId], references: [id])
+  service           Service   @relation(fields: [serviceId], references: [id])
+  customer          Customer  @relation(fields: [customerId], references: [id])
+}
+model Settings {
+  id String @id @default(cuid())
+
+  shopName String @default("Mein Barbershop")
+
+  reminderHours Int @default(24)
+  bookingBufferHours Int @default(2)
+
+  requireConfirmation Boolean @default(true)
+}
