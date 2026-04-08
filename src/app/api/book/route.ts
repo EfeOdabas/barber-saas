@@ -11,18 +11,9 @@ function toDate(date: string, time: string) {
 function formatPhone(phone: string) {
   const cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
 
-  if (cleaned.startsWith("+")) {
-    return cleaned;
-  }
-
-  if (cleaned.startsWith("00")) {
-    return `+${cleaned.slice(2)}`;
-  }
-
-  if (cleaned.startsWith("0")) {
-    return `+49${cleaned.slice(1)}`;
-  }
-
+  if (cleaned.startsWith("+")) return cleaned;
+  if (cleaned.startsWith("00")) return `+${cleaned.slice(2)}`;
+  if (cleaned.startsWith("0")) return `+49${cleaned.slice(1)}`;
   return `+49${cleaned}`;
 }
 
@@ -52,7 +43,6 @@ export async function POST(req: Request) {
     const date = String(formData.get("date") || "");
     const start = String(formData.get("start") || "");
     const end = String(formData.get("end") || "");
-
     const firstName = String(formData.get("firstName") || "");
     const lastName = String(formData.get("lastName") || "");
     const rawPhone = String(formData.get("phone") || "");
@@ -71,11 +61,21 @@ export async function POST(req: Request) {
     }
 
     const phone = formatPhone(rawPhone);
-
     const startAt = toDate(date, start);
     const endAt = toDate(date, end);
 
-    // Doppelbuchung verhindern
+    const barber = await prisma.barber.findUnique({
+      where: { id: barberId },
+    });
+
+    const service = await prisma.service.findUnique({
+      where: { id: serviceId },
+    });
+
+    if (!barber || !service) {
+      return new Response("Friseur oder Service nicht gefunden", { status: 404 });
+    }
+
     const existing = await prisma.appointment.findFirst({
       where: {
         barberId,
@@ -88,18 +88,12 @@ export async function POST(req: Request) {
       return new Response("Termin schon vergeben", { status: 400 });
     }
 
-    const salon = await prisma.salon.findFirst({
-      orderBy: { name: "asc" },
-    });
-
+    const salon = await prisma.salon.findFirst();
     const confirmationHours = salon?.confirmationHours ?? 24;
     const hoursUntilAppointment =
       (startAt.getTime() - Date.now()) / (1000 * 60 * 60);
-
-    // Innerhalb der Bestätigungsfrist = direkt bestätigt
     const autoConfirmed = hoursUntilAppointment <= confirmationHours;
 
-    // Kunde erstellen oder holen
     let customer = await prisma.customer.findFirst({
       where: { phone },
     });
@@ -114,8 +108,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // Termin erstellen
-    const appointment = await prisma.appointment.create({
+    await prisma.appointment.create({
       data: {
         barberId,
         serviceId,
@@ -124,19 +117,14 @@ export async function POST(req: Request) {
         endAt,
         confirmed: autoConfirmed,
       },
-      include: {
-        barber: true,
-        service: true,
-      },
     });
 
-    // WhatsApp darf nie crashen
     try {
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
       const authToken = process.env.TWILIO_AUTH_TOKEN;
       const from = process.env.TWILIO_WHATSAPP_FROM;
 
-      if (accountSid && authToken && from && phone) {
+      if (accountSid && authToken && from) {
         const client = twilio(accountSid, authToken);
 
         const body = autoConfirmed
@@ -144,8 +132,8 @@ export async function POST(req: Request) {
 
 dein Termin ist gebucht und direkt bestätigt ✅
 
-👤 Friseur: ${appointment.barber.name}
-✂️ Service: ${appointment.service.name}
+👤 Friseur: ${barber.name}
+✂️ Service: ${service.name}
 📅 Datum: ${formatDate(startAt)}
 ⏰ Uhrzeit: ${formatTime(startAt)}
 
@@ -154,8 +142,8 @@ Wir freuen uns auf dich.`
 
 dein Termin wurde angefragt:
 
-👤 Friseur: ${appointment.barber.name}
-✂️ Service: ${appointment.service.name}
+👤 Friseur: ${barber.name}
+✂️ Service: ${service.name}
 📅 Datum: ${formatDate(startAt)}
 ⏰ Uhrzeit: ${formatTime(startAt)}
 
@@ -172,8 +160,8 @@ Spätestens ${confirmationHours} Stunden vor dem Termin muss bestätigt sein.`;
           body,
         });
       }
-    } catch (err) {
-      console.error("WHATSAPP ERROR:", err);
+    } catch (twilioError) {
+      console.error("WHATSAPP ERROR:", twilioError);
     }
 
     return Response.redirect(new URL("/book", req.url));
