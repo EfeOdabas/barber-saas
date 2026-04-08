@@ -148,7 +148,7 @@ dein Termin wurde angefragt:
 📅 Datum: ${formatDate(startAt)}
 ⏰ Uhrzeit: ${formatTime(startAt)}
 
-Bitte bestätige deinen Termin:
+Bitte antworte mit:
 JA = bestätigen
 ABSAGEN = absagen
 

@@ -161,7 +161,7 @@ export async function POST(req: Request) {
 
     if (!customer) return xml("Kein Kunde gefunden.");
 
-    // 1) Zuerst aktives Wartelisten-Angebot prüfen
+    // 1) Aktives Wartelisten-Angebot zuerst prüfen
     const entry = await prisma.waitlistEntry.findFirst({
       where: {
         customerId: customer.id,
@@ -216,7 +216,10 @@ export async function POST(req: Request) {
           },
         });
 
-        return xml("Perfekt, dein Termin wurde für dich gebucht ✅");
+        return xml(`Perfekt, dein Termin wurde für dich gebucht ✅
+
+Wenn du den Termin doch absagen möchtest, schreibe:
+ABSAGEN`);
       }
 
       if (isCancelMessage(body)) {
@@ -246,7 +249,7 @@ export async function POST(req: Request) {
       return xml("Bitte antworte nur mit JA oder ABSAGEN.");
     }
 
-    // 2) Sonst normalen zukünftigen Termin suchen
+    // 2) Normalen zukünftigen Termin suchen
     const appointment = await prisma.appointment.findFirst({
       where: {
         customerId: customer.id,
@@ -270,7 +273,10 @@ export async function POST(req: Request) {
 👤 Friseur: ${appointment.barber.name}
 ✂️ Service: ${appointment.service.name}
 📅 Datum: ${formatDate(appointment.startAt)}
-⏰ Uhrzeit: ${formatTime(appointment.startAt)}`);
+⏰ Uhrzeit: ${formatTime(appointment.startAt)}
+
+Wenn du den Termin absagen möchtest, schreibe:
+ABSAGEN`);
       }
 
       await prisma.appointment.update({
@@ -283,7 +289,10 @@ export async function POST(req: Request) {
 👤 Friseur: ${appointment.barber.name}
 ✂️ Service: ${appointment.service.name}
 📅 Datum: ${formatDate(appointment.startAt)}
-⏰ Uhrzeit: ${formatTime(appointment.startAt)}`);
+⏰ Uhrzeit: ${formatTime(appointment.startAt)}
+
+Wenn du den Termin absagen möchtest, schreibe:
+ABSAGEN`);
     }
 
     if (isCancelMessage(body)) {
