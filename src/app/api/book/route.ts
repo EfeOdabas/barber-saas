@@ -137,7 +137,10 @@ dein Termin ist gebucht und direkt bestätigt ✅
 📅 Datum: ${formatDate(startAt)}
 ⏰ Uhrzeit: ${formatTime(startAt)}
 
-Wir freuen uns auf dich.`
+Wir freuen uns auf dich.
+
+Wenn du absagen willst, antworte einfach mit:
+ABSAGEN`
           : `Hi ${firstName},
 
 dein Termin wurde angefragt:
@@ -152,7 +155,10 @@ JA = bestätigen
 NEIN = absagen
 
 Wichtig:
-Spätestens ${confirmationHours} Stunden vor dem Termin muss bestätigt sein.`;
+Spätestens ${confirmationHours} Stunden vor dem Termin muss bestätigt sein.
+
+Wenn du komplett absagen willst, schreibe:
+ABSAGEN`;
 
         await client.messages.create({
           from,
@@ -164,7 +170,7 @@ Spätestens ${confirmationHours} Stunden vor dem Termin muss bestätigt sein.`;
       console.error("WHATSAPP ERROR:", twilioError);
     }
 
-    return Response.redirect(new URL("/book", req.url));
+    return Response.redirect(new URL("/book?success=1", req.url));
   } catch (error) {
     console.error("BOOK ERROR:", error);
     return new Response("Serverfehler beim Buchen", { status: 500 });

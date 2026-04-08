@@ -32,9 +32,12 @@ export default async function BookPage({
   searchParams: Promise<{
     serviceId?: string;
     date?: string;
+    success?: string; // ✅ NEU
   }>;
 }) {
   const params = await searchParams;
+
+  const success = params.success === "1"; // ✅ NEU
 
   const salon = await prisma.salon.findFirst();
 
@@ -135,7 +138,8 @@ export default async function BookPage({
         });
 
         const slotStartLocal = buildLocalDateTime(selectedDate, slot.start);
-        const respectsLeadTime = slotStartLocal.getTime() >= minAllowedDateTime.getTime();
+        const respectsLeadTime =
+          slotStartLocal.getTime() >= minAllowedDateTime.getTime();
 
         return !overlapsAppointment && !overlapsBreak && respectsLeadTime;
       });
@@ -156,18 +160,17 @@ export default async function BookPage({
   return (
     <main className="min-h-screen bg-neutral-950 text-white">
       <div className="mx-auto max-w-md space-y-6 px-4 py-6 sm:max-w-2xl lg:max-w-5xl">
-        <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur">
-          <p className="mb-2 text-xs uppercase tracking-[0.28em] text-neutral-400">
-            Online Terminbuchung
-          </p>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Buche deinen Termin in weniger als 1 Minute
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-neutral-300 sm:text-base">
-            Wähle zuerst deine Behandlung und dein Datum. Danach zeigen wir dir
-            direkt alle freien Termine pro Friseur.
-          </p>
-        </section>
+
+        {/* ✅ NEU: Erfolgsmeldung */}
+        {success && (
+          <section className="rounded-[24px] border border-green-500/30 bg-green-500/10 p-4 text-green-100 shadow-xl">
+            <div className="text-lg font-semibold">
+              Termin erfolgreich gebucht ✅
+            </div>
+            <div className="mt-1 text-sm text-green-200">
+              Du hast eine WhatsApp-Nachricht mit weiteren Infos erhalten.
+            </div>
+          </section>
 
         <section className="rounded-[28px] bg-white p-5 text-black shadow-2xl">
           <h2 className="mb-4 text-xl font-semibold sm:text-2xl">

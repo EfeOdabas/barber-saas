@@ -49,6 +49,18 @@ function slotMatchesWindow(
   return true;
 }
 
+function isCancelMessage(body: string) {
+  return [
+    "nein",
+    "absagen",
+    "absage",
+    "storno",
+    "stornieren",
+    "cancel",
+    "termin absagen",
+  ].includes(body);
+}
+
 async function offerNextWaitlistPerson(params: {
   barberId: string;
   serviceId: string;
@@ -208,7 +220,7 @@ export async function POST(req: Request) {
         return xml("Perfekt, dein Termin wurde für dich gebucht ✅");
       }
 
-      if (body === "nein") {
+      if (isCancelMessage(body)) {
         await prisma.waitlistEntry.update({
           where: { id: entry.id },
           data: {
@@ -232,7 +244,7 @@ export async function POST(req: Request) {
         return xml("Okay, wir geben den Termin an den nächsten weiter.");
       }
 
-      return xml("Bitte antworte nur mit JA oder NEIN.");
+      return xml("Bitte antworte nur mit JA, NEIN oder ABSAGEN.");
     }
 
     // 2) WENN KEIN WARTELISTEN-ANGEBOT:
@@ -268,7 +280,7 @@ export async function POST(req: Request) {
 ⏰ Uhrzeit: ${formatTime(appointment.startAt)}`);
     }
 
-    if (body === "nein") {
+    if (isCancelMessage(body)) {
       const date = appointment.startAt.toISOString().split("T")[0];
 
       await prisma.appointment.delete({
@@ -313,14 +325,14 @@ export async function POST(req: Request) {
           endAt: appointment.endAt,
           barberName: salonBarberName,
           serviceName,
-          excludeWaitlistId: nextEntry.id === undefined ? undefined : undefined,
+          excludeWaitlistId: undefined,
         });
       }
 
       return xml("Okay, dein Termin wurde abgesagt.");
     }
 
-    return xml("Bitte antworte nur mit JA oder NEIN.");
+    return xml("Bitte antworte nur mit JA, NEIN oder ABSAGEN.");
   } catch (error) {
     console.error("TWILIO INCOMING ERROR:", error);
     return xml("Fehler.");
