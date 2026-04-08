@@ -137,9 +137,7 @@ dein Termin ist gebucht und direkt bestätigt ✅
 📅 Datum: ${formatDate(startAt)}
 ⏰ Uhrzeit: ${formatTime(startAt)}
 
-Wir freuen uns auf dich.
-
-Wenn du absagen willst, antworte einfach mit:
+Wenn du den Termin absagen möchtest, schreibe:
 ABSAGEN`
           : `Hi ${firstName},
 
@@ -152,13 +150,10 @@ dein Termin wurde angefragt:
 
 Bitte bestätige deinen Termin:
 JA = bestätigen
-NEIN = absagen
+ABSAGEN = absagen
 
 Wichtig:
-Spätestens ${confirmationHours} Stunden vor dem Termin muss bestätigt sein.
-
-Wenn du komplett absagen willst, schreibe:
-ABSAGEN`;
+Spätestens ${confirmationHours} Stunden vor dem Termin muss bestätigt sein.`;
 
         await client.messages.create({
           from,

@@ -51,7 +51,6 @@ function slotMatchesWindow(
 
 function isCancelMessage(body: string) {
   return [
-    "nein",
     "absagen",
     "absage",
     "storno",
@@ -137,7 +136,7 @@ Ein passender Termin ist frei geworden:
 
 Schreibe:
 JA = Termin sichern
-NEIN = überspringen
+ABSAGEN = Angebot ablehnen
 
 ⏳ Du hast 15 Minuten Zeit.`;
 
@@ -162,7 +161,7 @@ export async function POST(req: Request) {
 
     if (!customer) return xml("Kein Kunde gefunden.");
 
-    // 1) ZUERST: aktives Wartelisten-Angebot prüfen
+    // 1) Zuerst aktives Wartelisten-Angebot prüfen
     const entry = await prisma.waitlistEntry.findFirst({
       where: {
         customerId: customer.id,
@@ -241,14 +240,13 @@ export async function POST(req: Request) {
           excludeWaitlistId: entry.id,
         });
 
-        return xml("Okay, wir geben den Termin an den nächsten weiter.");
+        return xml("Okay, das Angebot wurde abgelehnt.");
       }
 
-      return xml("Bitte antworte nur mit JA, NEIN oder ABSAGEN.");
+      return xml("Bitte antworte nur mit JA oder ABSAGEN.");
     }
 
-    // 2) KEIN WARTELISTEN-ANGEBOT:
-    // jetzt jeden zukünftigen Termin des Kunden suchen, egal ob bestätigt oder nicht
+    // 2) Sonst normalen zukünftigen Termin suchen
     const appointment = await prisma.appointment.findFirst({
       where: {
         customerId: customer.id,
@@ -290,57 +288,27 @@ export async function POST(req: Request) {
 
     if (isCancelMessage(body)) {
       const date = appointment.startAt.toISOString().split("T")[0];
+      const barberName = appointment.barber.name;
+      const serviceName = appointment.service.name;
 
       await prisma.appointment.delete({
         where: { id: appointment.id },
       });
 
-      const salonBarberName = appointment.barber.name;
-      const serviceName = appointment.service.name;
-
-      const nextWaitlistCandidates = await prisma.waitlistEntry.findMany({
-        where: {
-          serviceId: appointment.serviceId,
-          date,
-          status: "waiting",
-          OR: [
-            { anyBarber: true },
-            { barberId: appointment.barberId },
-          ],
-        },
-        include: {
-          customer: true,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
+      await offerNextWaitlistPerson({
+        barberId: appointment.barberId,
+        serviceId: appointment.serviceId,
+        date,
+        startAt: appointment.startAt,
+        endAt: appointment.endAt,
+        barberName,
+        serviceName,
       });
-
-      const nextEntry = nextWaitlistCandidates.find((candidate) =>
-        slotMatchesWindow(
-          appointment.startAt,
-          candidate.preferredFromTime,
-          candidate.preferredToTime
-        )
-      );
-
-      if (nextEntry) {
-        await offerNextWaitlistPerson({
-          barberId: appointment.barberId,
-          serviceId: appointment.serviceId,
-          date,
-          startAt: appointment.startAt,
-          endAt: appointment.endAt,
-          barberName: salonBarberName,
-          serviceName,
-          excludeWaitlistId: undefined,
-        });
-      }
 
       return xml("Okay, dein Termin wurde abgesagt.");
     }
 
-    return xml("Bitte antworte nur mit JA, NEIN oder ABSAGEN.");
+    return xml("Bitte antworte nur mit JA oder ABSAGEN.");
   } catch (error) {
     console.error("TWILIO INCOMING ERROR:", error);
     return xml("Fehler.");
