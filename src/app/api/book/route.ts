@@ -8,24 +8,74 @@ function toDate(date: string, time: string) {
   return d;
 }
 
+function formatPhone(phone: string) {
+  const cleaned = phone.replace(/\s+/g, "").replace(/-/g, "");
+
+  if (cleaned.startsWith("+")) {
+    return cleaned;
+  }
+
+  if (cleaned.startsWith("00")) {
+    return `+${cleaned.slice(2)}`;
+  }
+
+  if (cleaned.startsWith("0")) {
+    return `+49${cleaned.slice(1)}`;
+  }
+
+  return `+49${cleaned}`;
+}
+
+function formatDate(date: Date) {
+  return date.toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Europe/Berlin",
+  });
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Berlin",
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
 
-    const barberId = String(formData.get("barberId"));
-    const serviceId = String(formData.get("serviceId"));
-    const date = String(formData.get("date"));
-    const start = String(formData.get("start"));
-    const end = String(formData.get("end"));
+    const barberId = String(formData.get("barberId") || "");
+    const serviceId = String(formData.get("serviceId") || "");
+    const date = String(formData.get("date") || "");
+    const start = String(formData.get("start") || "");
+    const end = String(formData.get("end") || "");
 
-    const firstName = String(formData.get("firstName"));
-    const lastName = String(formData.get("lastName"));
-    const phone = String(formData.get("phone"));
+    const firstName = String(formData.get("firstName") || "");
+    const lastName = String(formData.get("lastName") || "");
+    const rawPhone = String(formData.get("phone") || "");
+
+    if (
+      !barberId ||
+      !serviceId ||
+      !date ||
+      !start ||
+      !end ||
+      !firstName ||
+      !lastName ||
+      !rawPhone
+    ) {
+      return new Response("Fehlende Daten", { status: 400 });
+    }
+
+    const phone = formatPhone(rawPhone);
 
     const startAt = toDate(date, start);
     const endAt = toDate(date, end);
 
-    // ❗ Doppelbuchung verhindern
+    // Doppelbuchung verhindern
     const existing = await prisma.appointment.findFirst({
       where: {
         barberId,
@@ -37,6 +87,17 @@ export async function POST(req: Request) {
     if (existing) {
       return new Response("Termin schon vergeben", { status: 400 });
     }
+
+    const salon = await prisma.salon.findFirst({
+      orderBy: { name: "asc" },
+    });
+
+    const confirmationHours = salon?.confirmationHours ?? 24;
+    const hoursUntilAppointment =
+      (startAt.getTime() - Date.now()) / (1000 * 60 * 60);
+
+    // Innerhalb der Bestätigungsfrist = direkt bestätigt
+    const autoConfirmed = hoursUntilAppointment <= confirmationHours;
 
     // Kunde erstellen oder holen
     let customer = await prisma.customer.findFirst({
@@ -61,7 +122,7 @@ export async function POST(req: Request) {
         customerId: customer.id,
         startAt,
         endAt,
-        confirmed: false,
+        confirmed: autoConfirmed,
       },
       include: {
         barber: true,
@@ -69,7 +130,7 @@ export async function POST(req: Request) {
       },
     });
 
-    // WhatsApp (FEHLER DARF NICHT CRASHEN)
+    // WhatsApp darf nie crashen
     try {
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
       const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -78,18 +139,32 @@ export async function POST(req: Request) {
       if (accountSid && authToken && from && phone) {
         const client = twilio(accountSid, authToken);
 
-        const body = `Hi ${firstName},
+        const body = autoConfirmed
+          ? `Hi ${firstName},
+
+dein Termin ist gebucht und direkt bestätigt ✅
+
+👤 Friseur: ${appointment.barber.name}
+✂️ Service: ${appointment.service.name}
+📅 Datum: ${formatDate(startAt)}
+⏰ Uhrzeit: ${formatTime(startAt)}
+
+Wir freuen uns auf dich.`
+          : `Hi ${firstName},
 
 dein Termin wurde angefragt:
 
 👤 Friseur: ${appointment.barber.name}
 ✂️ Service: ${appointment.service.name}
-📅 Datum: ${date}
-⏰ Uhrzeit: ${start}
+📅 Datum: ${formatDate(startAt)}
+⏰ Uhrzeit: ${formatTime(startAt)}
 
-ANTWORTE:
+Bitte bestätige deinen Termin:
 JA = bestätigen
-NEIN = absagen`;
+NEIN = absagen
+
+Wichtig:
+Spätestens ${confirmationHours} Stunden vor dem Termin muss bestätigt sein.`;
 
         await client.messages.create({
           from,
@@ -99,7 +174,6 @@ NEIN = absagen`;
       }
     } catch (err) {
       console.error("WHATSAPP ERROR:", err);
-      // ❗ KEIN ABSTURZ
     }
 
     return Response.redirect(new URL("/book", req.url));
