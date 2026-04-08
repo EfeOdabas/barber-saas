@@ -1,4 +1,5 @@
 import { prisma } from "../../lib/prisma";
+export const dynamic = "force-dynamic";
 
 function generateTimeOptions() {
   const times: string[] = [];

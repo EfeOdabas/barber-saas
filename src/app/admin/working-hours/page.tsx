@@ -1,4 +1,5 @@
 import { prisma } from "../../../lib/prisma";
+export const dynamic = "force-dynamic";
 
 const days = [
   { label: "Montag", value: 1 },

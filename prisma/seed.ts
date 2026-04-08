@@ -1,67 +1,100 @@
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
+
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  const salon = await prisma.salon.create({
-    data: {
+  const salon = await prisma.salon.upsert({
+    where: { id: "default-salon" },
+    update: {},
+    create: {
+      id: "default-salon",
       name: "Barber Shop Dortmund",
+      bookingIntervalMinutes: 15,
+      bookingLeadHours: 0,
+      confirmationHours: 24,
+      reminderHours: 2,
     },
   });
 
-  const ali = await prisma.barber.create({
-    data: {
+  const ali = await prisma.barber.upsert({
+    where: { id: "barber-ali" },
+    update: {},
+    create: {
+      id: "barber-ali",
       name: "Ali",
       salonId: salon.id,
     },
   });
 
-  const mehmet = await prisma.barber.create({
-    data: {
+  const mehmet = await prisma.barber.upsert({
+    where: { id: "barber-mehmet" },
+    update: {},
+    create: {
+      id: "barber-mehmet",
       name: "Mehmet",
       salonId: salon.id,
     },
   });
 
-  const yusuf = await prisma.barber.create({
-    data: {
-      name: "Yusuf",
-      salonId: salon.id,
-    },
-  });
-
-  await prisma.service.create({
-    data: {
+  await prisma.service.upsert({
+    where: { id: "service-haircut" },
+    update: {},
+    create: {
+      id: "service-haircut",
       name: "Haarschnitt",
       durationMinutes: 30,
       salonId: salon.id,
     },
   });
 
-  await prisma.service.create({
-    data: {
+  await prisma.service.upsert({
+    where: { id: "service-beard" },
+    update: {},
+    create: {
+      id: "service-beard",
+      name: "Bart",
+      durationMinutes: 20,
+      salonId: salon.id,
+    },
+  });
+
+  await prisma.service.upsert({
+    where: { id: "service-haircut-beard" },
+    update: {},
+    create: {
+      id: "service-haircut-beard",
       name: "Haarschnitt + Bart",
       durationMinutes: 45,
       salonId: salon.id,
     },
   });
 
-  const barbers = [ali, mehmet, yusuf];
-
-  for (const barber of barbers) {
-    for (let weekday = 1; weekday <= 6; weekday++) {
-      await prisma.workingHour.create({
-        data: {
+  for (const barber of [ali, mehmet]) {
+    for (const weekday of [1, 2, 3, 4, 5, 6]) {
+      const existing = await prisma.workingHour.findFirst({
+        where: {
           barberId: barber.id,
           weekday,
-          startTime: "10:00",
-          endTime: "20:00",
         },
       });
+
+      if (!existing) {
+        await prisma.workingHour.create({
+          data: {
+            barberId: barber.id,
+            weekday,
+            startTime: "10:00",
+            endTime: "19:00",
+          },
+        });
+      }
     }
   }
 
-  console.log("SEED FERTIG");
+  console.log("Seed fertig");
 }
 
 main()

@@ -1,4 +1,5 @@
 import { prisma } from "../../../lib/prisma";
+export const dynamic = "force-dynamic";
 
 function formatTime(date: Date) {
   return date.toLocaleTimeString("de-DE", {
