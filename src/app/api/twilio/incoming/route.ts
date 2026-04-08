@@ -150,6 +150,7 @@ export async function POST(req: Request) {
 
     if (!customer) return xml("Kein Kunde gefunden.");
 
+    // 1) ZUERST: aktives Wartelisten-Angebot prüfen
     const entry = await prisma.waitlistEntry.findFirst({
       where: {
         customerId: customer.id,
@@ -166,68 +167,157 @@ export async function POST(req: Request) {
       orderBy: { offerSentAt: "desc" },
     });
 
-    if (!entry) return xml("Kein aktives Angebot gefunden.");
-
-    if (body === "ja") {
-      const existing = await prisma.appointment.findFirst({
-        where: {
-          barberId: entry.offeredBarberId!,
-          startAt: entry.offeredStartAt!,
-          endAt: entry.offeredEndAt!,
-        },
-      });
-
-      if (existing) {
-        await prisma.waitlistEntry.update({
-          where: { id: entry.id },
-          data: { status: "expired" },
+    if (entry) {
+      if (body === "ja") {
+        const existing = await prisma.appointment.findFirst({
+          where: {
+            barberId: entry.offeredBarberId!,
+            startAt: entry.offeredStartAt!,
+            endAt: entry.offeredEndAt!,
+          },
         });
 
-        return xml("Der Termin ist leider nicht mehr verfügbar.");
+        if (existing) {
+          await prisma.waitlistEntry.update({
+            where: { id: entry.id },
+            data: { status: "expired" },
+          });
+
+          return xml("Der Termin ist leider nicht mehr verfügbar.");
+        }
+
+        await prisma.appointment.create({
+          data: {
+            barberId: entry.offeredBarberId!,
+            serviceId: entry.serviceId,
+            customerId: entry.customerId,
+            startAt: entry.offeredStartAt!,
+            endAt: entry.offeredEndAt!,
+            confirmed: true,
+          },
+        });
+
+        await prisma.waitlistEntry.update({
+          where: { id: entry.id },
+          data: {
+            status: "accepted",
+            acceptedAt: new Date(),
+          },
+        });
+
+        return xml("Perfekt, dein Termin wurde für dich gebucht ✅");
       }
 
-      await prisma.appointment.create({
-        data: {
+      if (body === "nein") {
+        await prisma.waitlistEntry.update({
+          where: { id: entry.id },
+          data: {
+            status: "declined",
+          },
+        });
+
+        await offerNextWaitlistPerson({
           barberId: entry.offeredBarberId!,
           serviceId: entry.serviceId,
-          customerId: entry.customerId,
+          date: entry.date,
           startAt: entry.offeredStartAt!,
           endAt: entry.offeredEndAt!,
-          confirmed: true,
-        },
+          barberName: entry.anyBarber
+            ? "Verfügbarer Friseur"
+            : entry.barber?.name || "Verfügbarer Friseur",
+          serviceName: entry.service.name,
+          excludeWaitlistId: entry.id,
+        });
+
+        return xml("Okay, wir geben den Termin an den nächsten weiter.");
+      }
+
+      return xml("Bitte antworte nur mit JA oder NEIN.");
+    }
+
+    // 2) WENN KEIN WARTELISTEN-ANGEBOT:
+    // normale unbestätigte Buchung suchen
+    const appointment = await prisma.appointment.findFirst({
+      where: {
+        customerId: customer.id,
+        confirmed: false,
+        startAt: { gt: new Date() },
+      },
+      include: {
+        barber: true,
+        service: true,
+      },
+      orderBy: { startAt: "asc" },
+    });
+
+    if (!appointment) {
+      return xml("Kein aktiver unbestätigter Termin gefunden.");
+    }
+
+    if (body === "ja") {
+      await prisma.appointment.update({
+        where: { id: appointment.id },
+        data: { confirmed: true },
       });
 
-      await prisma.waitlistEntry.update({
-        where: { id: entry.id },
-        data: {
-          status: "accepted",
-          acceptedAt: new Date(),
-        },
-      });
+      return xml(`Perfekt, dein Termin ist jetzt bestätigt ✅
 
-      return xml("Perfekt, dein Termin wurde für dich gebucht ✅");
+👤 Friseur: ${appointment.barber.name}
+✂️ Service: ${appointment.service.name}
+📅 Datum: ${formatDate(appointment.startAt)}
+⏰ Uhrzeit: ${formatTime(appointment.startAt)}`);
     }
 
     if (body === "nein") {
-      await prisma.waitlistEntry.update({
-        where: { id: entry.id },
-        data: {
-          status: "declined",
+      const date = appointment.startAt.toISOString().split("T")[0];
+
+      await prisma.appointment.delete({
+        where: { id: appointment.id },
+      });
+
+      const salonBarberName = appointment.barber.name;
+      const serviceName = appointment.service.name;
+
+      const nextWaitlistCandidates = await prisma.waitlistEntry.findMany({
+        where: {
+          serviceId: appointment.serviceId,
+          date,
+          status: "waiting",
+          OR: [
+            { anyBarber: true },
+            { barberId: appointment.barberId },
+          ],
+        },
+        include: {
+          customer: true,
+        },
+        orderBy: {
+          createdAt: "asc",
         },
       });
 
-      await offerNextWaitlistPerson({
-        barberId: entry.offeredBarberId!,
-        serviceId: entry.serviceId,
-        date: entry.date,
-        startAt: entry.offeredStartAt!,
-        endAt: entry.offeredEndAt!,
-        barberName: entry.anyBarber ? "Verfügbarer Friseur" : entry.barber?.name || "Verfügbarer Friseur",
-        serviceName: entry.service.name,
-        excludeWaitlistId: entry.id,
-      });
+      const nextEntry = nextWaitlistCandidates.find((candidate) =>
+        slotMatchesWindow(
+          appointment.startAt,
+          candidate.preferredFromTime,
+          candidate.preferredToTime
+        )
+      );
 
-      return xml("Okay, wir geben den Termin an den nächsten weiter.");
+      if (nextEntry) {
+        await offerNextWaitlistPerson({
+          barberId: appointment.barberId,
+          serviceId: appointment.serviceId,
+          date,
+          startAt: appointment.startAt,
+          endAt: appointment.endAt,
+          barberName: salonBarberName,
+          serviceName,
+          excludeWaitlistId: nextEntry.id === undefined ? undefined : undefined,
+        });
+      }
+
+      return xml("Okay, dein Termin wurde abgesagt.");
     }
 
     return xml("Bitte antworte nur mit JA oder NEIN.");
