@@ -32,12 +32,11 @@ export default async function BookPage({
   searchParams: Promise<{
     serviceId?: string;
     date?: string;
-    success?: string; // ✅ NEU
+    success?: string;
   }>;
 }) {
   const params = await searchParams;
-
-  const success = params.success === "1"; // ✅ NEU
+  const success = params.success === "1";
 
   const salon = await prisma.salon.findFirst();
 
@@ -66,7 +65,9 @@ export default async function BookPage({
 
   const leadHours = salon?.bookingLeadHours || 0;
   const bookingInterval = salon?.bookingIntervalMinutes || 15;
-  const minAllowedDateTime = new Date(today.getTime() + leadHours * 60 * 60 * 1000);
+  const minAllowedDateTime = new Date(
+    today.getTime() + leadHours * 60 * 60 * 1000
+  );
 
   if (selectedService) {
     for (const barber of barbers) {
@@ -160,8 +161,6 @@ export default async function BookPage({
   return (
     <main className="min-h-screen bg-neutral-950 text-white">
       <div className="mx-auto max-w-md space-y-6 px-4 py-6 sm:max-w-2xl lg:max-w-5xl">
-
-        {/* ✅ NEU: Erfolgsmeldung */}
         {success && (
           <section className="rounded-[24px] border border-green-500/30 bg-green-500/10 p-4 text-green-100 shadow-xl">
             <div className="text-lg font-semibold">
@@ -171,6 +170,20 @@ export default async function BookPage({
               Du hast eine WhatsApp-Nachricht mit weiteren Infos erhalten.
             </div>
           </section>
+        )}
+
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 shadow-2xl backdrop-blur">
+          <p className="mb-2 text-xs uppercase tracking-[0.28em] text-neutral-400">
+            Online Terminbuchung
+          </p>
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Buche deinen Termin in weniger als 1 Minute
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-neutral-300 sm:text-base">
+            Wähle zuerst deine Behandlung und dein Datum. Danach zeigen wir dir
+            direkt alle freien Termine pro Friseur.
+          </p>
+        </section>
 
         <section className="rounded-[28px] bg-white p-5 text-black shadow-2xl">
           <h2 className="mb-4 text-xl font-semibold sm:text-2xl">
@@ -222,7 +235,8 @@ export default async function BookPage({
               </p>
               {leadHours > 0 && (
                 <p className="mt-1 text-sm text-yellow-300">
-                  Buchungen sind nur mindestens {leadHours} Stunden im Voraus möglich.
+                  Buchungen sind nur mindestens {leadHours} Stunden im Voraus
+                  möglich.
                 </p>
               )}
             </div>
@@ -290,7 +304,11 @@ export default async function BookPage({
                           className="mt-4 space-y-3 border-t border-neutral-200 pt-4"
                         >
                           <input type="hidden" name="barberId" value={slot.barberId} />
-                          <input type="hidden" name="serviceId" value={selectedService.id} />
+                          <input
+                            type="hidden"
+                            name="serviceId"
+                            value={selectedService.id}
+                          />
                           <input type="hidden" name="date" value={selectedDate} />
                           <input type="hidden" name="start" value={slot.start} />
                           <input type="hidden" name="end" value={slot.end} />
@@ -300,7 +318,8 @@ export default async function BookPage({
                           </div>
 
                           <div className="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-neutral-700">
-                            Friseur: <span className="font-semibold">{slot.barberName}</span>
+                            Friseur:{" "}
+                            <span className="font-semibold">{slot.barberName}</span>
                           </div>
 
                           <input
@@ -343,7 +362,8 @@ export default async function BookPage({
           </h2>
 
           <p className="mb-4 text-sm text-gray-600">
-            Trag dich in die Warteliste ein. Du kannst auch optional ein Zeitfenster angeben.
+            Trag dich in die Warteliste ein. Du kannst auch optional ein
+            Zeitfenster angeben.
           </p>
 
           <form action="/api/waitlist" method="POST" className="grid gap-3">
