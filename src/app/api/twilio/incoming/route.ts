@@ -247,12 +247,11 @@ export async function POST(req: Request) {
       return xml("Bitte antworte nur mit JA, NEIN oder ABSAGEN.");
     }
 
-    // 2) WENN KEIN WARTELISTEN-ANGEBOT:
-    // normale unbestätigte Buchung suchen
+    // 2) KEIN WARTELISTEN-ANGEBOT:
+    // jetzt jeden zukünftigen Termin des Kunden suchen, egal ob bestätigt oder nicht
     const appointment = await prisma.appointment.findFirst({
       where: {
         customerId: customer.id,
-        confirmed: false,
         startAt: { gt: new Date() },
       },
       include: {
@@ -263,10 +262,19 @@ export async function POST(req: Request) {
     });
 
     if (!appointment) {
-      return xml("Kein aktiver unbestätigter Termin gefunden.");
+      return xml("Kein aktiver Termin gefunden.");
     }
 
     if (body === "ja") {
+      if (appointment.confirmed) {
+        return xml(`Dein Termin ist bereits bestätigt ✅
+
+👤 Friseur: ${appointment.barber.name}
+✂️ Service: ${appointment.service.name}
+📅 Datum: ${formatDate(appointment.startAt)}
+⏰ Uhrzeit: ${formatTime(appointment.startAt)}`);
+      }
+
       await prisma.appointment.update({
         where: { id: appointment.id },
         data: { confirmed: true },
